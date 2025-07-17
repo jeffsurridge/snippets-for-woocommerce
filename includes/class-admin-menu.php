@@ -32,14 +32,14 @@ class AdminMainMenu{
 
     public function settings_page(){
         // Handle form submission
-        $coupon_toggle = get_option('sfw_hello_world_toggle', 'off');
+        $coupon_toggle = get_option('sfw_custom_coupon_message_toggle', 'off');
         $current_message = get_option('sfw_coupon_message', '');
         $checkout_toggle = get_option('sfw_checkout_coupon_toggle', 'off');
         $checkout_message = get_option('sfw_checkout_coupon_message', '');
         $error = '';
         if (isset($_POST['sfw_toggle_submit'])) {
             check_admin_referer('sfw_toggle_save', 'sfw_toggle_nonce');
-            $toggle_value = isset($_POST['sfw_hello_world_toggle']) ? 'on' : 'off';
+            $toggle_value = isset($_POST['sfw_custom_coupon_message_toggle']) ? 'on' : 'off';
             $message_value = isset($_POST['sfw_coupon_message']) ? sanitize_text_field($_POST['sfw_coupon_message']) : '';
             $checkout_toggle_value = isset($_POST['sfw_checkout_coupon_toggle']) ? 'on' : 'off';
             $checkout_message_value = isset($_POST['sfw_checkout_coupon_message']) ? sanitize_text_field($_POST['sfw_checkout_coupon_message']) : '';
@@ -53,7 +53,7 @@ class AdminMainMenu{
                 $has_error = true;
             }
             if (!$has_error) {
-                update_option('sfw_hello_world_toggle', $toggle_value);
+                update_option('sfw_custom_coupon_message_toggle', $toggle_value);
                 if ($toggle_value === 'on') {
                     update_option('sfw_coupon_message', $message_value);
                 } else {
@@ -79,7 +79,7 @@ class AdminMainMenu{
             <form method="post">
                 <?php wp_nonce_field('sfw_toggle_save', 'sfw_toggle_nonce'); ?>
                 <label class="sfw-switch">
-                    <input type="checkbox" name="sfw_hello_world_toggle" id="sfw_hello_world_toggle" <?php checked($coupon_toggle, 'on'); ?> onchange="document.getElementById('sfw_coupon_message_wrap').style.display = this.checked ? 'block' : 'none';" />
+                    <input type="checkbox" name="sfw_custom_coupon_message_toggle" id="sfw_custom_coupon_message_toggle" <?php checked($coupon_toggle, 'on'); ?> onchange="document.getElementById('sfw_coupon_message_wrap').style.display = this.checked ? 'block' : 'none';" />
                     <span class="sfw-slider"></span>
                 </label>
                 <span style="margin-left:10px;vertical-align:middle;">Enable Custom Coupon Message</span>
@@ -137,7 +137,7 @@ class AdminMainMenu{
             </style>
             <script>
             document.addEventListener('DOMContentLoaded', function() {
-                var toggle = document.getElementById('sfw_hello_world_toggle');
+                var toggle = document.getElementById('sfw_custom_coupon_message_toggle');
                 var msgWrap = document.getElementById('sfw_coupon_message_wrap');
                 msgWrap.style.display = toggle.checked ? 'block' : 'none';
                 var checkoutToggle = document.getElementById('sfw_checkout_coupon_toggle');
