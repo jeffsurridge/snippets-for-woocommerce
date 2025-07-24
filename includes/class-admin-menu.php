@@ -4,6 +4,7 @@ class AdminMainMenu{
 
     public function __construct(){
         add_action('admin_menu',[$this, 'register_admin_menu']);
+        add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_scripts']);
     }
 
     public function register_admin_menu(){
@@ -26,6 +27,24 @@ class AdminMainMenu{
         );
     }
 
+    public function enqueue_admin_scripts($hook) {
+        // Only enqueue on our settings page
+        if ($hook !== 'snippets-for-woocommerce_page_sfw-settings') {
+            return;
+        }
+        wp_enqueue_script(
+            'sfw-admin-product-search',
+            plugin_dir_url(__FILE__) . '../JS/sfw-admin-product-search.js',
+            array('jquery'),
+            '1.0',
+            true
+        );
+        wp_localize_script('sfw-admin-product-search', 'sfwProductSearch', array(
+            'ajax_url' => admin_url('admin-ajax.php'),
+            'nonce'    => wp_create_nonce('sfw_product_search_nonce')
+        ));
+    }
+
     public function dashboard_page(){
         echo "<h1> Dashboard </h1>";
     }
@@ -39,6 +58,8 @@ class AdminMainMenu{
         $error = '';
         $minimum_toggle = get_option('sfw_minimum_order_toggle', 'off');
         $minimum_amount = get_option('sfw_minimum_order_amount', '');
+        $hide_products_toggle = get_option('sfw_hide_products_from_guests_toggle', 'off');
+        $hidden_product_ids = get_option('sfw_hidden_product_ids', '');
         if (isset($_POST['sfw_toggle_submit'])) {
             check_admin_referer('sfw_toggle_save', 'sfw_toggle_nonce');
             $toggle_value = isset($_POST['sfw_custom_coupon_message_toggle']) ? 'on' : 'off';
@@ -47,6 +68,8 @@ class AdminMainMenu{
             $checkout_message_value = isset($_POST['sfw_checkout_coupon_message']) ? sanitize_text_field($_POST['sfw_checkout_coupon_message']) : '';
             $minimum_toggle_value = isset($_POST['sfw_minimum_order_toggle']) ? 'on' : 'off';
             $minimum_amount_value = isset($_POST['sfw_minimum_order_amount']) ? sanitize_text_field($_POST['sfw_minimum_order_amount']) : '';
+            $hide_products_toggle_value = isset($_POST['sfw_hide_products_from_guests_toggle']) ? 'on' : 'off';
+            $hidden_product_ids_value = isset($_POST['sfw_hidden_product_ids']) ? sanitize_text_field($_POST['sfw_hidden_product_ids']) : '';
             $has_error = false;
             if ($toggle_value === 'on' && empty($message_value)) {
                 $error .= '<div class="error"><p>Please enter a coupon message for the first toggle when enabled.</p></div>';
@@ -79,6 +102,12 @@ class AdminMainMenu{
                 } else {
                     update_option('sfw_minimum_order_amount', '');
                 }
+                update_option('sfw_hide_products_from_guests_toggle', $hide_products_toggle_value);
+                if ($hide_products_toggle_value === 'on') {
+                    update_option('sfw_hidden_product_ids', $hidden_product_ids_value);
+                } else {
+                    update_option('sfw_hidden_product_ids', '');
+                }
                 echo '<div class="updated"><p>Settings saved.</p></div>';
                 $coupon_toggle = $toggle_value;
                 $current_message = $message_value;
@@ -86,6 +115,8 @@ class AdminMainMenu{
                 $checkout_message = $checkout_message_value;
                 $minimum_toggle = $minimum_toggle_value;
                 $minimum_amount = $minimum_amount_value;
+                $hide_products_toggle = $hide_products_toggle_value;
+                $hidden_product_ids = $hidden_product_ids_value;
             }
         }
         ?>
@@ -129,6 +160,22 @@ class AdminMainMenu{
                     <label for="sfw_minimum_order_amount"><strong>Minimum Order Amount:</strong></label><br>
                     <input type="number" min="1" name="sfw_minimum_order_amount" id="sfw_minimum_order_amount" value="<?php echo esc_attr($minimum_amount); ?>" style="width:150px;" />
                 </div>
+                <hr style="margin:30px 0;">
+                <!-- Hide Products From Guests Toggle -->
+                <label class="sfw-switch">
+                    <input type="checkbox" name="sfw_hide_products_from_guests_toggle" id="sfw_hide_products_from_guests_toggle" <?php checked($hide_products_toggle, 'on'); ?> onchange="document.getElementById('sfw_hidden_product_ids_wrap').style.display = this.checked ? 'block' : 'none';" />
+                    <span class="sfw-slider"></span>
+                </label>
+                <span style="margin-left:10px;vertical-align:middle;">Hide Selected Products From Guests</span>
+                <br><br>
+                <div id="sfw_hidden_product_ids_wrap" style="margin-bottom:15px;<?php echo ($hide_products_toggle === 'on') ? '' : 'display:none;'; ?>">
+                    <label for="sfw_product_search_input"><strong>Products to Hide:</strong></label><br>
+                    <input type="text" id="sfw_product_search_input" placeholder="Search products..." autocomplete="off" style="width:350px;" />
+                    <div id="sfw_product_search_results" style="border:1px solid #ccc;max-height:150px;overflow-y:auto;margin-bottom:10px;"></div>
+                    <div id="sfw_selected_products" style="margin-bottom:10px;"></div>
+                    <input type="hidden" name="sfw_hidden_product_ids" id="sfw_hidden_product_ids" value="<?php echo esc_attr($hidden_product_ids); ?>" />
+                    <p class="description">Search and select products to hide from guests.</p>
+                </div>
                 <input type="submit" name="sfw_toggle_submit" class="button button-primary" value="Save Changes" />
             </form>
             <style>
@@ -164,6 +211,29 @@ class AdminMainMenu{
                 .sfw-switch input:checked + .sfw-slider:before {
                   transform: translateX(26px);
                 }
+                .sfw-selected-product {
+                    display: inline-block;
+                    background: #f1f1f1;
+                    border: 1px solid #ccc;
+                    border-radius: 3px;
+                    padding: 2px 8px;
+                    margin: 2px 4px 2px 0;
+                    font-size: 13px;
+                    position: relative;
+                }
+                .sfw-selected-product .sfw-remove {
+                    color: #a00;
+                    margin-left: 8px;
+                    cursor: pointer;
+                    font-weight: bold;
+                }
+                .sfw-search-result {
+                    padding: 4px 8px;
+                    cursor: pointer;
+                }
+                .sfw-search-result:hover {
+                    background: #e5f3ff;
+                }
             </style>
             <script>
             document.addEventListener('DOMContentLoaded', function() {
@@ -176,6 +246,11 @@ class AdminMainMenu{
                 var minimumToggle = document.getElementById('sfw_minimum_order_toggle');
                 var minimumWrap = document.getElementById('sfw_minimum_order_wrap');
                 minimumWrap.style.display = minimumToggle.checked ? 'block' : 'none';
+                var hideProductsToggle = document.getElementById('sfw_hide_products_from_guests_toggle');
+                var hiddenProductsWrap = document.getElementById('sfw_hidden_product_ids_wrap');
+                if (hideProductsToggle && hiddenProductsWrap) {
+                    hiddenProductsWrap.style.display = hideProductsToggle.checked ? 'block' : 'none';
+                }
             });
             </script>
         </div>

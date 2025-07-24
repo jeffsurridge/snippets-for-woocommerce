@@ -52,4 +52,67 @@ add_action('plugins_loaded', function() {
             });
         }
     }
+    // Hide products from guests logic
+    if (get_option('sfw_hide_products_from_guests_toggle', 'off') === 'on') {
+        $ids = get_option('sfw_hidden_product_ids', '');
+        $hidden_product_ids = array_filter(array_map('intval', explode(',', $ids)));
+        if (!empty($hidden_product_ids)) {
+            // Hide products from shop, category, tag, search for guests
+            add_action('pre_get_posts', function($query) use ($hidden_product_ids) {
+                if (
+                    !is_user_logged_in() &&
+                    !is_admin() &&
+                    $query->is_main_query() &&
+                    (is_shop() || is_product_category() || is_product_tag() || is_search())
+                ) {
+                    $query->set('post__not_in', $hidden_product_ids);
+                }
+            });
+            // Disable purchase button for guests
+            add_filter('woocommerce_is_purchasable', function($purchasable, $product) use ($hidden_product_ids) {
+                if (!is_user_logged_in() && in_array($product->get_id(), $hidden_product_ids)) {
+                    return false;
+                }
+                return $purchasable;
+            }, 10, 2);
+        }
+    }
+});
+
+add_action('wp_ajax_sfw_product_search', function() {
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error('Unauthorized', 403);
+    }
+    check_ajax_referer('sfw_product_search_nonce', 'nonce');
+    $results = [];
+    if (!empty($_POST['ids'])) {
+        $ids = array_filter(array_map('intval', explode(',', $_POST['ids'])));
+        if (!empty($ids)) {
+            $query = new WP_Query([
+                'post_type' => 'product',
+                'post__in' => $ids,
+                'posts_per_page' => count($ids),
+            ]);
+            foreach ($query->posts as $post) {
+                $results[] = [
+                    'id' => $post->ID,
+                    'text' => get_the_title($post->ID)
+                ];
+            }
+        }
+    } elseif (!empty($_POST['term'])) {
+        $term = sanitize_text_field($_POST['term']);
+        $query = new WP_Query([
+            'post_type' => 'product',
+            's' => $term,
+            'posts_per_page' => 10,
+        ]);
+        foreach ($query->posts as $post) {
+            $results[] = [
+                'id' => $post->ID,
+                'text' => get_the_title($post->ID)
+            ];
+        }
+    }
+    wp_send_json_success($results);
 });
